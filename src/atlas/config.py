@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # LLM
-    llm_provider: Literal["offline", "openai", "anthropic", "azure"] = Field(
+    llm_provider: Literal["offline", "openai", "anthropic", "azure", "xai"] = Field(
         "offline", alias="ATLAS_LLM_PROVIDER"
     )
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     azure_endpoint: str | None = Field(None, alias="AZURE_OPENAI_ENDPOINT")
     azure_api_version: str = Field("2024-10-21", alias="AZURE_OPENAI_API_VERSION")
     azure_deployment: str | None = Field(None, alias="ATLAS_AZURE_DEPLOYMENT")
+    # xAI (Grok) exposes an OpenAI-compatible API
+    xai_api_key: str | None = Field(None, alias="XAI_API_KEY")
+    xai_model: str = Field("grok-4", alias="ATLAS_XAI_MODEL")
+    xai_base_url: str = Field("https://api.x.ai/v1", alias="ATLAS_XAI_BASE_URL")
 
     # Embeddings
     embedding_provider: Literal["lsa", "sentence-transformers", "openai"] = Field(

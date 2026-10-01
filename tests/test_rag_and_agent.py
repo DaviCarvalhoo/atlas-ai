@@ -112,3 +112,11 @@ def test_missing_credentials_fall_back_to_offline(monkeypatch):
 
     settings = Settings(ATLAS_LLM_PROVIDER="anthropic", ANTHROPIC_API_KEY=None)
     assert build_llm(settings).offline is True
+
+
+def test_xai_provider_uses_openai_compatible_endpoint():
+    from atlas.config import Settings
+
+    llm = build_llm(Settings(ATLAS_LLM_PROVIDER="xai", XAI_API_KEY="test", ATLAS_XAI_MODEL="grok-x"))
+    assert (llm.provider, llm.model, llm.offline) == ("xai", "grok-x", False)
+    assert str(llm.inner.client.base_url).startswith("https://api.x.ai")

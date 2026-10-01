@@ -39,7 +39,7 @@ Atlas turns that into **measurable** outcomes:
 | Protect customer data (LGPD) | PII masking before any model, log or LLM call; hashed audit trail | 0 raw PII in logs (tested) |
 
 > Everything runs **with zero API keys** (deterministic offline mode) so any reviewer can reproduce it in one
-> command — and switches to **OpenAI, Azure OpenAI or Anthropic Claude** with one environment variable.
+> command — and switches to **OpenAI, Azure OpenAI, Anthropic Claude or xAI Grok** with one environment variable.
 
 ---
 
@@ -110,7 +110,7 @@ of failing the request.
 </td><td width="50%" valign="top">
 
 **🧠 LLMs, RAG & Agents**
-- Provider-agnostic layer: **OpenAI, Azure OpenAI, Anthropic (Claude)** + offline mode
+- Provider-agnostic layer: **OpenAI, Azure OpenAI, Anthropic (Claude), xAI (Grok)** + offline mode
 - Retries with backoff, latency/token accounting, **JSONL tracing**, versioned prompts
 - Structure-aware chunking + **pluggable embeddings** (LSA offline · sentence-transformers · OpenAI)
 - **ChromaDB** vector store + char-n-gram keyword index fused with **Reciprocal Rank Fusion**
@@ -191,6 +191,7 @@ cp .env.example .env
 ATLAS_LLM_PROVIDER=anthropic   ANTHROPIC_API_KEY=...     # default model: claude-opus-5-5
 ATLAS_LLM_PROVIDER=openai      OPENAI_API_KEY=...
 ATLAS_LLM_PROVIDER=azure       AZURE_OPENAI_API_KEY=...  AZURE_OPENAI_ENDPOINT=...  ATLAS_AZURE_DEPLOYMENT=...
+ATLAS_LLM_PROVIDER=xai         XAI_API_KEY=...           # Grok, via OpenAI-compatible endpoint
 
 # optional: neural embeddings (better semantic retrieval)
 pip install -e ".[local-embeddings]"  &&  ATLAS_EMBEDDING_PROVIDER=sentence-transformers atlas index

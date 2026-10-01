@@ -106,22 +106,25 @@ def train_priority(train: pd.DataFrame, test: pd.DataFrame, threshold: float) ->
 
 
 def train_anomaly(tracker: Tracker) -> tuple[anomaly.AnomalyDetector, dict]:
+    """Champion/challenger: evaluate both detectors on labelled incident days, promote the best."""
     settings = get_settings()
     wide = anomaly.daily_matrix(read_only_query(anomaly.DAILY_COUNTS_SQL))
     feats = anomaly.build_features(wide)
-    detector = anomaly.AnomalyDetector().fit(feats)
-    scored = detector.score(feats)
-
     incidents = pd.read_csv(settings.data_dir / "incidents.csv", parse_dates=["date"])
     truth = set(incidents["date"])
-    metrics = {
-        "isolation_forest": anomaly.detection_metrics(scored["is_anomaly"], truth),
-        "zscore_baseline": anomaly.detection_metrics(anomaly.zscore_baseline(feats), truth),
-        "top_anomalies": anomaly.top_anomalies(scored),
-        "days": len(feats),
-    }
-    tracker.log_metrics({f"anomaly_{k}": v for k, v in metrics["isolation_forest"].items()})
-    return detector, metrics
+
+    results, detectors = {}, {}
+    for method in ("robust_z", "isolation_forest"):
+        det = anomaly.AnomalyDetector(method=method).fit(feats)
+        results[method] = anomaly.detection_metrics(det.score(feats)["is_anomaly"], truth)
+        detectors[method] = det
+        tracker.log_metrics({f"anomaly_{method}_{k}": v for k, v in results[method].items()})
+
+    champion = max(results, key=lambda m: results[m]["f1"])
+    metrics = {**results, "champion": champion,
+               "top_anomalies": anomaly.top_anomalies(detectors[champion].score(feats)),
+               "days": len(feats)}
+    return detectors[champion], metrics
 
 
 def run_training() -> dict:
@@ -152,8 +155,8 @@ def run_training() -> dict:
                                    {"features": "tfidf(text)+onehot(tier,channel,category)"}, fp)
 
         det, an_metrics = train_anomaly(tracker)
-        an_mv = registry.register("anomaly", det, an_metrics["isolation_forest"],
-                                  {"contamination": det.contamination}, fp)
+        an_mv = registry.register("anomaly", det, an_metrics[an_metrics["champion"]],
+                                  {"method": det.method, "threshold": det.threshold}, fp)
 
         # Reference distribution for drift monitoring (PSI) in production.
         reference = {"category": train["category"].value_counts(normalize=True).to_dict(),

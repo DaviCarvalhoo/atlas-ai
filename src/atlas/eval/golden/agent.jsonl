@@ -1,0 +1,18 @@
+{"question": "Meu pedido 10234 está atrasado, o que faço?", "intent": "order_lookup"}
+{"question": "Qual o status do pedido 12001?", "intent": "order_lookup"}
+{"question": "O pedido 10500 já foi enviado?", "intent": "order_lookup"}
+{"question": "Recebi o pedido 11200 com a caixa amassada", "intent": "order_lookup"}
+{"question": "Quero cancelar o pedido 13020 antes do envio", "intent": "order_lookup"}
+{"question": "Qual a taxa de violação de SLA por prioridade?", "intent": "analytics"}
+{"question": "Qual transportadora mais atrasa as entregas?", "intent": "analytics"}
+{"question": "Quantos tickets temos por categoria?", "intent": "analytics"}
+{"question": "Como está a evolução do volume de chamados por mês?", "intent": "analytics"}
+{"question": "Qual o CSAT médio por canal de atendimento?", "intent": "analytics"}
+{"question": "Quais clientes mais abrem chamados? quero um ranking", "intent": "analytics"}
+{"question": "Em quantos dias posso desistir de uma compra?", "intent": "knowledge"}
+{"question": "Como faço para trocar um produto com defeito?", "intent": "knowledge"}
+{"question": "O link de redefinição de senha expirou", "intent": "knowledge"}
+{"question": "Quero excluir minha conta e meus dados", "intent": "knowledge"}
+{"question": "Posso parcelar em quantas vezes sem juros?", "intent": "knowledge"}
+{"question": "O aplicativo fecha sozinho no meu celular", "intent": "knowledge"}
+{"question": "Qual o prazo de entrega para o Sul?", "intent": "knowledge"}

@@ -34,12 +34,14 @@ Atlas turns that into **measurable** outcomes:
 | Never miss an urgent ticket | Priority model with tier/channel features | **urgent recall 0.89** |
 | Answer policy questions with sources | Hybrid RAG (dense + keyword, RRF) boosted by the ML triage | **hit@3 = 1.00**, MRR 0.95 |
 | "Where is my order?" | Agent tool: parametrised, ownership-checked SQL | 100% routing accuracy |
-| Analysts ask questions in natural language | Text-to-SQL behind a SQL guard + read-only transaction | 22/22 red-team cases blocked/passed |
+| Analysts ask questions in natural language | Schema-grounded, **self-correcting** text-to-SQL behind a SQL guard + read-only transaction | 22/22 red-team cases blocked/passed |
+| Grounded answers | LLM answers only from retrieved context, with citations | key fact present in **96.9%** of answers (Groq `gpt-oss-120b`) |
 | Detect incidents early | Seasonal robust-z vs IsolationForest (champion/challenger) | **F1 0.84**, precision 0.89 |
 | Protect customer data (LGPD) | PII masking before any model, log or LLM call; hashed audit trail | 0 raw PII in logs (tested) |
 
 > Everything runs **with zero API keys** (deterministic offline mode) so any reviewer can reproduce it in one
-> command — and switches to **OpenAI, Azure OpenAI, Anthropic Claude or xAI Grok** with one environment variable.
+> command — and switches to **OpenAI, Azure OpenAI, Anthropic Claude, xAI Grok or Groq (open-weight models such as
+> `gpt-oss-120b`)** with one environment variable.
 
 ---
 
@@ -110,7 +112,7 @@ of failing the request.
 </td><td width="50%" valign="top">
 
 **🧠 LLMs, RAG & Agents**
-- Provider-agnostic layer: **OpenAI, Azure OpenAI, Anthropic (Claude), xAI (Grok)** + offline mode
+- Provider-agnostic layer: **OpenAI, Azure OpenAI, Anthropic (Claude), xAI (Grok), Groq (open-weight models)** + offline mode
 - Retries with backoff, latency/token accounting, **JSONL tracing**, versioned prompts
 - Structure-aware chunking + **pluggable embeddings** (LSA offline · sentence-transformers · OpenAI)
 - **ChromaDB** vector store + char-n-gram keyword index fused with **Reciprocal Rank Fusion**
@@ -145,7 +147,7 @@ of failing the request.
 </td><td valign="top">
 
 **🧪 Quality**
-- **49 tests**: unit, integration, API, and the online-LLM code path (scripted fake LLM)
+- **52 tests**: unit, integration, API, the online-LLM code path (scripted fake LLM), SQL self-repair and provider-outage fallback
 - Golden sets for retrieval (32 Qs) and agent routing (18 Qs) + a **red-team suite** (22 cases)
 - **Quality gates** in CI: the build fails if any metric regresses below its threshold
 - Ruff lint/format, GitHub Actions, Docker build
@@ -180,7 +182,7 @@ pip install -e ".[dev]"
 atlas bootstrap          # build-db → train → index → evaluate (with quality gates)
 atlas ask "Meu pedido 10234 está atrasado, o que faço?"
 atlas serve              # http://localhost:8000/docs
-pytest                   # 49 tests
+pytest                   # 52 tests
 ```
 
 ### Use a real LLM
@@ -192,6 +194,7 @@ ATLAS_LLM_PROVIDER=anthropic   ANTHROPIC_API_KEY=...     # default model: claude
 ATLAS_LLM_PROVIDER=openai      OPENAI_API_KEY=...
 ATLAS_LLM_PROVIDER=azure       AZURE_OPENAI_API_KEY=...  AZURE_OPENAI_ENDPOINT=...  ATLAS_AZURE_DEPLOYMENT=...
 ATLAS_LLM_PROVIDER=xai         XAI_API_KEY=...           # Grok, via OpenAI-compatible endpoint
+ATLAS_LLM_PROVIDER=groq        GROQ_API_KEY=...          # open-weight models (default: openai/gpt-oss-120b)
 
 # optional: neural embeddings (better semantic retrieval)
 pip install -e ".[local-embeddings]"  &&  ATLAS_EMBEDDING_PROVIDER=sentence-transformers atlas index
@@ -245,11 +248,27 @@ All numbers below are reproducible with `atlas bootstrap` (seed 42) and are writ
 
 ### Agent & safety
 
-| Metric | Result |
-|---|---|
-| Routing accuracy (18 golden questions) | **1.00** |
-| Answer contains the key fact (offline extractive mode) | 0.875 |
-| Red-team suite (injection, SQL attacks, PII) | **22 / 22** |
+| Metric | Offline (no key) | LLM: Groq · `openai/gpt-oss-120b` |
+|---|---|---|
+| Routing accuracy (18 golden questions) | **1.00** (heuristics) | **1.00** (LLM router) |
+| Answer contains the key fact (32 golden questions) | 0.875 (extractive) | **0.969** (generated, cited) |
+| Red-team suite (injection, SQL attacks, PII) | **22 / 22** | **22 / 22** |
+
+The LLM evaluation ran on Groq's free tier: it hit 104 rate-limit responses (429), and every one was recovered by the
+rate-limit-aware backoff.
+
+### Lessons from running against a real LLM
+
+Testing with a real open-weight model surfaced failure modes that mocks never would. Each one is now fixed and
+covered by a test:
+
+| Failure | Symptom | Fix |
+|---|---|---|
+| **Wrong SQL dialect** | `INTERVAL '3 months'` (Postgres) sent to SQLite → syntax error | Prompt receives the live dialect and data range; DB errors are fed back to the model for **one self-repair attempt** |
+| **Hallucinated enum value** | `status = 'canceled'` (data says `cancelled`) → *silently* returned **0** instead of **85** | Prompt is grounded with the exact allowed values per column |
+| **Reasoning models burn the token budget** | `gpt-oss` spent all 500 tokens thinking → empty JSON → crashed the graph | Larger caps and **graceful degradation**: any LLM failure falls back to curated SQL / extractive answers |
+| **Misleading fallback** | A failed query fell back to an *unrelated* template | Templates are used only when the provider is down, never to paper over a wrong query |
+| **Typographic Unicode** | `24 horas`, `e‑mail`, `【1】` broke string matching (grounding looked like 0.50) | Output normalisation (NFKC + punctuation folding) before display and evaluation |
 
 ### Quality gates (CI fails below these)
 
@@ -336,7 +355,7 @@ atlas-ai/
 │   └── cli.py               # `atlas` command
 ├── sql/                     # schema.sql, analytics.sql
 ├── knowledge_base/          # policy documents (RAG corpus, PT-BR)
-├── tests/                   # 49 tests
+├── tests/                   # 52 tests
 ├── scripts/eda.py           # exploratory analysis → docs/eda.md
 ├── docs/                    # design spec, EDA report
 ├── Dockerfile · docker-compose.yml · .github/workflows/ci.yml
@@ -362,7 +381,8 @@ atlas-ai/
 - The data is **synthetic** (seeded and realistic, but not real customer behaviour). Next step: plug in real tickets via the same SQL schema.
 - Golden sets are small (32 + 18 questions), and some retrieval settings were chosen on them. A larger,
   held-out set and **LLM-as-judge** grounding evaluation (faithfulness / answer relevance) would be the next step.
-- The offline answer mode is extractive. Real answer quality comes from an LLM provider.
+- The offline answer mode is extractive (0.875). With an LLM, grounding rises to 0.969. The metric is still a
+  string-match proxy, and an LLM-as-judge would measure faithfulness more precisely.
 - Production hardening: secrets manager, OAuth/JWT instead of a static key, Redis-backed rate limiting,
   OpenTelemetry/LangSmith tracing, MLflow Model Registry or Azure ML instead of the file registry, and scheduled
   retraining triggered by drift alerts.
@@ -377,7 +397,9 @@ mostrar ponta a ponta como se leva IA a um problema real de negócio:
 - **Machine Learning (Pandas, NumPy, Scikit-learn):**
   - Classificação de tickets por categoria e prioridade (macro-F1 de **0,94** e recall de **0,89** nos tickets urgentes).
   - Detecção de incidentes em **séries temporais** (F1 de **0,84**), com seleção champion/challenger.
-- **LLMs:** a mesma interface atende **OpenAI, Azure OpenAI e Anthropic (Claude)**, e há um modo offline determinístico que roda sem chave.
+- **LLMs:** a mesma interface atende **OpenAI, Azure OpenAI, Anthropic (Claude), xAI e Groq**. A Groq roda modelos open source, como o `gpt-oss-120b`. Há também um modo offline determinístico que roda sem chave.
+- **Testado com LLM real:** a resposta contém o fato esperado em **96,9%** dos casos.
+- **Text-to-SQL com autocorreção:** o prompt traz os valores válidos de cada coluna, e o erro do banco volta para o modelo corrigir a consulta.
 - **RAG:** embeddings plugáveis, **ChromaDB** e busca híbrida (densa + palavras-chave, combinadas com RRF), com reforço pela categoria prevista pelo ML. Resultado: **hit@3 = 1,0**.
 - **Agente LangGraph:** guardrails, consulta de pedidos com checagem de dono e text-to-SQL seguro.
 - **SQL:** PostgreSQL/SQLite com CTEs e funções de janela.

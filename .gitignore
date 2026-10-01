@@ -12,9 +12,9 @@ htmlcov/
 .env
 
 # generated artifacts (rebuilt by `atlas bootstrap`)
-data/
-artifacts/
-mlruns/
+/data/
+/artifacts/
+/mlruns/
 mlflow.db
 
 .idea/

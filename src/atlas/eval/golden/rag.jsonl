@@ -1,0 +1,32 @@
+{"question": "Em quantos dias posso desistir de uma compra?", "source": "politica-de-trocas-e-devolucoes.md", "answer_contains": "7 dias"}
+{"question": "Comprei uma roupa e não serviu, consigo trocar por outro tamanho?", "source": "politica-de-trocas-e-devolucoes.md", "answer_contains": "30 dias"}
+{"question": "Quanto tempo demora para chegar a etiqueta de postagem reversa?", "source": "politica-de-trocas-e-devolucoes.md", "answer_contains": "24 horas"}
+{"question": "Recebi um item diferente do que pedi, o que acontece?", "source": "politica-de-trocas-e-devolucoes.md", "answer_contains": "2 dias úteis"}
+{"question": "Qual o prazo do estorno no cartão de crédito?", "source": "politica-de-reembolso.md", "answer_contains": "2 faturas"}
+{"question": "Fui cobrado duas vezes, o que vocês fazem?", "source": "politica-de-reembolso.md", "answer_contains": "estorno"}
+{"question": "Em quanto tempo o dinheiro do pix volta?", "source": "politica-de-reembolso.md", "answer_contains": "24 horas"}
+{"question": "Paguei o boleto e o pedido ainda não foi confirmado", "source": "politica-de-reembolso.md", "answer_contains": "3 dias úteis"}
+{"question": "Como recebo a nota fiscal da minha compra?", "source": "politica-de-reembolso.md", "answer_contains": "e-mail"}
+{"question": "Qual o prazo de entrega para o Nordeste?", "source": "prazos-e-entregas.md", "answer_contains": "5 a 10"}
+{"question": "Meu pedido está atrasado mais de uma semana, posso pedir reembolso?", "source": "prazos-e-entregas.md", "answer_contains": "7 dias"}
+{"question": "A transportadora diz que entregou mas não chegou nada aqui", "source": "prazos-e-entregas.md", "answer_contains": "extravio"}
+{"question": "Dá para mudar o endereço depois que o pedido foi despachado?", "source": "prazos-e-entregas.md", "answer_contains": "processando"}
+{"question": "Quais transportadoras vocês usam?", "source": "prazos-e-entregas.md", "answer_contains": "Jadlog"}
+{"question": "O link para trocar a senha expirou", "source": "conta-e-seguranca.md", "answer_contains": "30 minutos"}
+{"question": "Não chega o SMS com o código de verificação", "source": "conta-e-seguranca.md", "answer_contains": "e-mail"}
+{"question": "Minha conta foi bloqueada, como desbloqueio?", "source": "conta-e-seguranca.md", "answer_contains": "selfie"}
+{"question": "Acho que alguém invadiu minha conta", "source": "conta-e-seguranca.md", "answer_contains": "urgente"}
+{"question": "Posso alterar o CPF do meu cadastro?", "source": "conta-e-seguranca.md", "answer_contains": "documento"}
+{"question": "Quero que apaguem todos os meus dados pessoais", "source": "lgpd-e-privacidade.md", "answer_contains": "5 anos"}
+{"question": "Em quanto tempo vocês respondem um pedido feito com base na LGPD?", "source": "lgpd-e-privacidade.md", "answer_contains": "15 dias"}
+{"question": "A inteligência artificial de vocês envia meu CPF para terceiros?", "source": "lgpd-e-privacidade.md", "answer_contains": "mascarados"}
+{"question": "Dá erro 500 quando vou finalizar a compra", "source": "suporte-tecnico-app.md", "answer_contains": "Pix"}
+{"question": "O aplicativo fecha sozinho no meu celular", "source": "suporte-tecnico-app.md", "answer_contains": "versão"}
+{"question": "Qual versão do Android o app suporta?", "source": "suporte-tecnico-app.md", "answer_contains": "Android 9"}
+{"question": "Qual o prazo de primeira resposta para um chamado urgente?", "source": "sla-e-escalonamento.md", "answer_contains": "1 hora"}
+{"question": "Quais benefícios tem o cliente gold?", "source": "sla-e-escalonamento.md", "answer_contains": "especialista"}
+{"question": "Registrei reclamação no Reclame Aqui, para onde vai?", "source": "sla-e-escalonamento.md", "answer_contains": "ouvidoria"}
+{"question": "Posso parcelar em quantas vezes sem juros?", "source": "pagamentos-e-parcelamento.md", "answer_contains": "10x"}
+{"question": "O QR code do pix venceu, e agora?", "source": "pagamentos-e-parcelamento.md", "answer_contains": "30 minutos"}
+{"question": "Meu pedido está em análise antifraude há dois dias", "source": "pagamentos-e-parcelamento.md", "answer_contains": "48 horas"}
+{"question": "Quais bandeiras de cartão são aceitas?", "source": "pagamentos-e-parcelamento.md", "answer_contains": "Elo"}

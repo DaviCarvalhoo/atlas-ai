@@ -25,6 +25,10 @@ STATES = ["SP", "RJ", "MG", "PR", "RS", "SC", "BA", "PE", "GO", "DF", "CE", "ES"
 CARRIERS = ["Correios", "Jadlog", "Loggi", "Total Express"]
 PAYMENTS = ["credit_card", "pix", "boleto", "debit_card"]
 CHANNELS = ["email", "chat", "whatsapp", "phone"]
+CARRIER_LATE_RATE = {"Correios": 0.24, "Jadlog": 0.15, "Loggi": 0.09, "Total Express": 0.17}
+# Mean resolution hours per priority (urgent tickets are worked first) and SLA targets.
+RESOLUTION_MEAN_H = {"urgent": 6.0, "high": 18.0, "medium": 30.0, "low": 55.0}
+SLA_TARGET_H = {"urgent": 8, "high": 24, "medium": 48, "low": 120}
 
 TEMPLATES: dict[str, list[str]] = {
     "billing": [
@@ -148,7 +152,9 @@ def _orders(rng: np.random.Generator, customers: pd.DataFrame, n: int, start: da
         eta = created.date() + timedelta(days=int(rng.integers(3, 12)))
         status = rng.choice(["delivered", "shipped", "processing", "cancelled", "returned"],
                             p=[0.68, 0.15, 0.08, 0.05, 0.04])
-        delay = int(rng.choice([0, 0, 0, 1, 2, 5, 9]))
+        carrier = str(rng.choice(CARRIERS))
+        late = rng.random() < CARRIER_LATE_RATE[carrier]
+        delay = int(rng.choice([1, 2, 3, 5, 9])) if late else 0
         rows.append({
             "order_id": 10000 + oid,
             "customer_id": int(rng.integers(1, len(customers) + 1)),
@@ -156,7 +162,7 @@ def _orders(rng: np.random.Generator, customers: pd.DataFrame, n: int, start: da
             "status": status,
             "total_value": round(float(rng.lognormal(5.0, 0.7)), 2),
             "payment_method": rng.choice(PAYMENTS, p=[0.5, 0.3, 0.1, 0.1]),
-            "carrier": rng.choice(CARRIERS),
+            "carrier": carrier,
             "estimated_delivery": eta,
             "delivered_at": eta + timedelta(days=delay) if status == "delivered" else None,
         })
@@ -235,25 +241,29 @@ def generate(seed: int = 42, n_customers: int = 1500, n_orders: int = 6000,
             pii = {"email": cust["email"], "cpf": cust["cpf"], "phone": cust["phone"]}
             body, urgent = _ticket_text(rng, category, order_id, carrier, cust["state"], pii)
             priority = _priority(rng, category, urgent, cust["tier"])
+            channel = str(rng.choice(CHANNELS, p=[0.35, 0.3, 0.25, 0.1]))
             label = category
             if rng.random() < 0.05:  # annotation noise, as in real labelled data
                 label = str(rng.choice(CATEGORIES))
             created = datetime.combine(day, datetime.min.time()) + timedelta(
                 minutes=int(rng.integers(0, 1440)))
             resolved = rng.random() < 0.92
+            hours = float(rng.gamma(2.0, RESOLUTION_MEAN_H[priority] / 2.0))
+            breached = hours > SLA_TARGET_H[priority]
+            csat_mean = 4.3 - 0.5 * urgent - 1.1 * breached + (0.2 if channel == "chat" else 0.0)
             tickets.append({
                 "ticket_id": tid,
                 "customer_id": cid,
                 "order_id": order_id,
                 "created_at": created,
-                "channel": rng.choice(CHANNELS, p=[0.35, 0.3, 0.25, 0.1]),
+                "channel": channel,
                 "subject": body.split(",")[0][:60],
                 "body": body,
                 "category": label,
                 "priority": priority,
                 "status": "resolved" if resolved else rng.choice(["open", "pending"]),
-                "resolution_hours": round(float(rng.gamma(2.0, 10.0)), 1) if resolved else None,
-                "csat": int(np.clip(round(rng.normal(4.1 - 0.6 * urgent, 0.9)), 1, 5)) if resolved else None,
+                "resolution_hours": round(hours, 1) if resolved else None,
+                "csat": int(np.clip(round(rng.normal(csat_mean, 0.8)), 1, 5)) if resolved else None,
             })
             tid += 1
 

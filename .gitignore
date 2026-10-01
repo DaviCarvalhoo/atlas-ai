@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# environment / secrets
+.env
+
+# generated artifacts (rebuilt by `atlas bootstrap`)
+data/
+artifacts/
+mlruns/
+mlflow.db
+
+.idea/
+.vscode/
+.DS_Store

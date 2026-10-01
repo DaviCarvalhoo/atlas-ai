@@ -268,7 +268,7 @@ covered by a test:
 | **Hallucinated enum value** | `status = 'canceled'` (data says `cancelled`) → *silently* returned **0** instead of **85** | Prompt is grounded with the exact allowed values per column |
 | **Reasoning models burn the token budget** | `gpt-oss` spent all 500 tokens thinking → empty JSON → crashed the graph | Larger caps and **graceful degradation**: any LLM failure falls back to curated SQL / extractive answers |
 | **Misleading fallback** | A failed query fell back to an *unrelated* template | Templates are used only when the provider is down, never to paper over a wrong query |
-| **Typographic Unicode** | `24 horas`, `e‑mail`, `【1】` broke string matching (grounding looked like 0.50) | Output normalisation (NFKC + punctuation folding) before display and evaluation |
+| **Typographic Unicode** | Narrow no-break spaces (`U+202F` in "24 horas"), non-breaking hyphens (`U+2011` in "e-mail") and CJK brackets (`【1】`) broke string matching, so grounding looked like 0.50 | Output normalisation (NFKC + punctuation folding) before display and evaluation |
 
 ### Quality gates (CI fails below these)
 

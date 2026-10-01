@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
 
 import pandas as pd
 
 from atlas.analytics import load_queries
-from atlas.db import read_only_query
+from atlas.db import get_engine, read_only_query
+from atlas.llm.prompts import SQL_SYSTEM
 from atlas.security.sql_guard import validate_sql
 
 ORDER_SQL = """
@@ -143,3 +145,14 @@ def run_sql(sql: str) -> tuple[str, pd.DataFrame]:
 
 def run_named_analytics(name: str) -> tuple[str, pd.DataFrame]:
     return run_sql(load_queries()[name].sql)
+
+
+@lru_cache
+def sql_system_prompt() -> str:
+    """Schema-grounded text-to-SQL prompt: real dialect and real data range of this database."""
+    rng = read_only_query("SELECT MIN(created_at) AS lo, MAX(created_at) AS hi FROM tickets")
+    return SQL_SYSTEM.format(
+        dialect=get_engine().dialect.name,
+        min_date=str(rng.loc[0, "lo"])[:10],
+        max_date=str(rng.loc[0, "hi"])[:10],
+    )

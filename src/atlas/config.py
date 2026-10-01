@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # LLM
-    llm_provider: Literal["offline", "openai", "anthropic", "azure", "xai"] = Field(
+    llm_provider: Literal["offline", "openai", "anthropic", "azure", "xai", "groq"] = Field(
         "offline", alias="ATLAS_LLM_PROVIDER"
     )
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     xai_api_key: str | None = Field(None, alias="XAI_API_KEY")
     xai_model: str = Field("grok-4", alias="ATLAS_XAI_MODEL")
     xai_base_url: str = Field("https://api.x.ai/v1", alias="ATLAS_XAI_BASE_URL")
+    # Groq serves open-source models (Llama, Qwen, ...) behind an OpenAI-compatible API
+    groq_api_key: str | None = Field(None, alias="GROQ_API_KEY")
+    groq_model: str = Field("openai/gpt-oss-120b", alias="ATLAS_GROQ_MODEL")
+    groq_base_url: str = Field("https://api.groq.com/openai/v1", alias="ATLAS_GROQ_BASE_URL")
 
     # Embeddings
     embedding_provider: Literal["lsa", "sentence-transformers", "openai"] = Field(

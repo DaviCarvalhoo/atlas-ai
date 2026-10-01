@@ -24,11 +24,13 @@ from langgraph.graph import END, StateGraph
 from atlas.agent import tools
 from atlas.llm.prompts import (
     ANSWER_SYSTEM,
+    INSIGHT_SYSTEM,
     PROMPT_VERSION,
     ROUTER_SYSTEM,
-    SQL_SYSTEM,
+    SQL_REPAIR,
     answer_user_prompt,
 )
+from atlas.llm.providers import LLMError
 from atlas.rag.retriever import RetrievedChunk
 from atlas.security.guardrails import check_input
 from atlas.security.pii import mask_pii
@@ -69,6 +71,9 @@ CATEGORY_SOURCES = {
     "returns": {"politica-de-trocas-e-devolucoes.md"},
 }
 CATEGORY_BOOST_MIN_CONFIDENCE = 0.75
+
+# Generous caps: reasoning models (e.g. gpt-oss, o-series) spend tokens thinking before answering.
+MAX_TOKENS = {"route": 1500, "sql": 3000, "answer": 3000}
 
 
 class AgentState(TypedDict, total=False):
@@ -166,7 +171,7 @@ class SupportAgent:
         if not self.llm.offline:
             try:
                 resp = self.llm.complete(
-                    ROUTER_SYSTEM, q, max_tokens=200, json_mode=True, task="route"
+                    ROUTER_SYSTEM, q, max_tokens=MAX_TOKENS["route"], json_mode=True, task="route"
                 )
                 data = _parse_json(resp.text)
                 if data.get("intent") in ("order_lookup", "analytics", "knowledge"):
@@ -203,28 +208,65 @@ class SupportAgent:
         }
 
     def analytics(self, state: AgentState) -> AgentState:
-        q, sql, df = state["question"], None, pd.DataFrame()
+        q = state["question"]
+        if self.llm.offline:
+            return self._template_analytics(state, reason="offline")
         try:
-            if not self.llm.offline:
-                resp = self.llm.complete(
-                    SQL_SYSTEM, q, max_tokens=500, json_mode=True, task="text_to_sql"
-                )
-                sql, df = tools.run_sql(_parse_json(resp.text)["sql"])
-            else:
-                name = tools.analytics_query_for(q)
-                if name:
-                    sql, df = tools.run_named_analytics(name)
-        except (UnsafeSQLError, KeyError, ValueError) as exc:
+            sql, df, attempts = self._text_to_sql(q)
+        except UnsafeSQLError as exc:  # a security violation is never retried or worked around
             log.warning("text-to-SQL rejected: %s", exc)
             return {
                 "sql": None,
                 "rows": [],
                 "steps": [*state["steps"], f"analytics: rejected ({exc})"],
             }
+        except LLMError as exc:  # provider unavailable → curated queries still work
+            log.warning("LLM unavailable for text-to-SQL: %s", exc)
+            return self._template_analytics(state, reason="llm unavailable")
+        if sql is None:
+            return {
+                "sql": None,
+                "rows": [],
+                "steps": [*state["steps"], f"analytics: failed after {attempts} attempts"],
+            }
         return {
             "sql": sql,
             "rows": df.head(50).to_dict(orient="records"),
-            "steps": [*state["steps"], f"analytics: {len(df)} rows"],
+            "steps": [*state["steps"], f"analytics: {len(df)} rows (llm sql, attempts={attempts})"],
+        }
+
+    def _text_to_sql(self, question: str, max_attempts: int = 2):
+        """Generate → guard → execute; on a database error, feed the error back to the model
+        once so it can repair the query (self-correction loop)."""
+        prompt = question
+        for attempt in range(1, max_attempts + 1):
+            resp = self.llm.complete(
+                tools.sql_system_prompt(),
+                prompt,
+                max_tokens=MAX_TOKENS["sql"],
+                json_mode=True,
+                task="text_to_sql" if attempt == 1 else "sql_repair",
+            )
+            candidate = _parse_json(resp.text).get("sql", "")
+            try:
+                sql, df = tools.run_sql(candidate)
+                return sql, df, attempt
+            except UnsafeSQLError:
+                raise
+            except Exception as exc:
+                error = str(exc).splitlines()[0][:300]
+                log.warning("SQL attempt %d failed: %s", attempt, error)
+                prompt = SQL_REPAIR.format(question=question, sql=candidate, error=error)
+        return None, None, max_attempts
+
+    def _template_analytics(self, state: AgentState, reason: str) -> AgentState:
+        sql, df = None, pd.DataFrame()
+        if name := tools.analytics_query_for(state["question"]):
+            sql, df = tools.run_named_analytics(name)
+        return {
+            "sql": sql,
+            "rows": df.head(50).to_dict(orient="records"),
+            "steps": [*state["steps"], f"analytics: {len(df)} rows (template, {reason})"],
         }
 
     def retrieve(self, state: AgentState) -> AgentState:
@@ -255,23 +297,42 @@ class SupportAgent:
         }
         if state["intent"] == "analytics":
             text = _analytics_answer(state.get("rows", []), state.get("sql"))
+            if state.get("rows") and not self.llm.offline:
+                try:
+                    insight = self.llm.complete(
+                        INSIGHT_SYSTEM,
+                        f"Pergunta: {state['question']}\nResultado (JSON): "
+                        + json.dumps(state["rows"][:50], ensure_ascii=False, default=str),
+                        max_tokens=MAX_TOKENS["answer"],
+                        task="insight",
+                    )
+                    text = f"{insight.text.strip()}\n\n{text}"
+                except Exception as exc:
+                    log.warning("insight generation failed: %s", exc)
         elif self.llm.offline:
             text = _extractive_answer(
                 state["question"], state.get("order"), state.get("chunks", [])
             )
         else:
-            resp = self.llm.complete(
-                ANSWER_SYSTEM,
-                answer_user_prompt(state["question"], context),
-                max_tokens=700,
-                task="answer",
-            )
-            text = resp.text
-            llm_meta.update(
-                latency_ms=resp.latency_ms,
-                input_tokens=resp.input_tokens,
-                output_tokens=resp.output_tokens,
-            )
+            try:
+                resp = self.llm.complete(
+                    ANSWER_SYSTEM,
+                    answer_user_prompt(state["question"], context),
+                    max_tokens=MAX_TOKENS["answer"],
+                    task="answer",
+                )
+                text = resp.text
+                llm_meta.update(
+                    latency_ms=resp.latency_ms,
+                    input_tokens=resp.input_tokens,
+                    output_tokens=resp.output_tokens,
+                )
+            except Exception as exc:  # provider down → still answer, from the same context
+                log.warning("LLM answer failed, using extractive fallback: %s", exc)
+                text = _extractive_answer(
+                    state["question"], state.get("order"), state.get("chunks", [])
+                )
+                llm_meta["fallback"] = "extractive"
         return {
             "answer": text,
             "citations": citations,

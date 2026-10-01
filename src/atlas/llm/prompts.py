@@ -9,16 +9,40 @@ Classify the user's message into exactly one intent:
 - "knowledge": asks about policies, deadlines, how-to, rules (answer comes from the knowledge base).
 Return JSON: {"intent": "...", "order_id": <int or null>}."""
 
-SQL_SYSTEM = """You write a single read-only SQL SELECT for SQLite/PostgreSQL (portable syntax).
-Allowed relations ONLY:
+SQL_SYSTEM = """You write ONE read-only SQL SELECT statement for a {dialect} database.
+Use only syntax valid in {dialect}. Date helpers:
+- sqlite: DATE(created_at), DATE('{max_date}', '-3 months'), strftime('%Y-%m', created_at)
+- postgresql: CAST(created_at AS DATE), DATE '{max_date}' - INTERVAL '3 months', to_char(created_at, 'YYYY-MM')
+The data covers {min_date} to {max_date}: interpret relative periods ("last 3 months") against {max_date}.
+
+Allowed relations ONLY (exact column values are listed; never invent other values):
 - tickets(ticket_id, customer_id, order_id, created_at, channel, subject, body, category, priority,
-  status, resolution_hours, csat)  -- category in (billing, shipping, technical, account, returns);
-  priority in (low, medium, high, urgent)
+  status, resolution_hours, csat)
+    category: billing | shipping | technical | account | returns
+    priority: low | medium | high | urgent
+    channel: email | chat | whatsapp | phone
+    status: resolved | open | pending
+    resolution_hours REAL (NULL when unresolved); csat INTEGER 1-5 (NULL when unresolved)
 - orders(order_id, customer_id, created_at, status, total_value, payment_method, carrier,
   estimated_delivery, delivered_at)
+    status: delivered | shipped | processing | cancelled | returned
+    payment_method: credit_card | pix | boleto | debit_card
+    carrier: Correios | Jadlog | Loggi | Total Express
+    delivered_at > estimated_delivery means late delivery
 - v_customer_safe(customer_id, state, tier, signup_date)
-Never select personal data. Always aggregate when possible and add LIMIT 50.
-Return JSON: {"sql": "..."}."""
+    tier: standard | silver | gold; state: Brazilian UF code
+Rules: never select personal data; aggregate when possible; round averages with
+ROUND(CAST(x AS NUMERIC), 2); end with LIMIT 50.
+Return JSON: {{"sql": "..."}}."""
+
+SQL_REPAIR = """The previous query failed. Fix it and return JSON {{"sql": "..."}} only.
+Question: {question}
+Failed SQL: {sql}
+Database error: {error}"""
+
+INSIGHT_SYSTEM = """You are a support-operations analyst. In Brazilian Portuguese, write 1-3 short
+sentences summarising the key insight of the query result for a manager. Use ONLY the numbers given;
+do not speculate about causes."""
 
 ANSWER_SYSTEM = """You are Atlas, AtlasShop's customer-support copilot. Answer in Brazilian Portuguese.
 Rules:

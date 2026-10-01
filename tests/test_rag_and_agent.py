@@ -121,3 +121,46 @@ def test_xai_provider_uses_openai_compatible_endpoint():
     llm = build_llm(settings)
     assert (llm.provider, llm.model, llm.offline) == ("xai", "grok-x", False)
     assert str(llm.inner.client.base_url).startswith("https://api.x.ai")
+
+
+class ScriptedSQLLLM(FakeLLM):
+    """Returns a broken query first, then a valid one — exercises the self-correction loop."""
+
+    def __init__(self, sqls: list[str]):
+        super().__init__(sqls[0])
+        self.sqls = list(sqls)
+
+    def complete(self, system, user, *, max_tokens=1024, json_mode=False, task="generic"):
+        if task in ("text_to_sql", "sql_repair"):
+            self.calls.append(task)
+            return LLMResponse(json.dumps({"sql": self.sqls.pop(0)}), "fake", "f")
+        return super().complete(system, user, max_tokens=max_tokens, json_mode=json_mode, task=task)
+
+
+def test_text_to_sql_repairs_after_database_error(built_env):
+    from atlas.ml.service import TriageService
+    from atlas.rag.retriever import Retriever
+
+    llm = ScriptedSQLLLM(["SELECT nope FROM tickets", "SELECT COUNT(*) AS n FROM tickets"])
+    state = SupportAgent(llm, Retriever(), TriageService()).invoke("quantos tickets temos?")
+    assert llm.calls.count("sql_repair") == 1
+    assert state["rows"][0]["n"] > 0
+    assert "attempts=2" in state["steps"][-2]
+
+
+class DownLLM(FakeLLM):
+    def complete(self, system, user, *, max_tokens=1024, json_mode=False, task="generic"):
+        from atlas.llm.providers import LLMError
+
+        raise LLMError("provider down")
+
+
+def test_agent_degrades_gracefully_when_llm_is_down(built_env):
+    from atlas.ml.service import TriageService
+    from atlas.rag.retriever import Retriever
+
+    agent = SupportAgent(DownLLM("x"), Retriever(), TriageService())
+    analytics = agent.invoke("Qual transportadora mais atrasa as entregas?")
+    assert analytics["rows"] and "template" in analytics["steps"][-2]
+    knowledge = agent.invoke("Em quantos dias posso desistir de uma compra?")
+    assert knowledge["llm"]["fallback"] == "extractive" and "7 dias" in knowledge["answer"]

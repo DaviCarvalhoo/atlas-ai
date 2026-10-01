@@ -1,4 +1,4 @@
-"""Provider-agnostic LLM layer: OpenAI, Azure OpenAI, xAI Grok, Anthropic and an offline mode.
+"""Provider-agnostic LLM layer: OpenAI, Azure, Anthropic, xAI, Groq + offline.
 
 Every call goes through :func:`traced`, which records latency, token usage and a prompt hash to a
 JSONL trace file — a lightweight stand-in for LangSmith-style LLMOps tracing.
@@ -58,8 +58,15 @@ class OfflineLLM:
 class OpenAILLM:
     offline = False
 
-    def __init__(self, settings: Settings, azure: bool = False, xai: bool = False):
-        if xai:
+    def __init__(
+        self, settings: Settings, azure: bool = False, xai: bool = False, groq: bool = False
+    ):
+        if groq:
+            from openai import OpenAI
+
+            self.client = OpenAI(api_key=settings.groq_api_key, base_url=settings.groq_base_url)
+            self.provider, self.model = "groq", settings.groq_model
+        elif xai:
             from openai import OpenAI
 
             self.client = OpenAI(api_key=settings.xai_api_key, base_url=settings.xai_base_url)
@@ -186,6 +193,8 @@ def build_llm(settings: Settings | None = None) -> TracedLLM:
         inner: LLM = OpenAILLM(settings)
     elif provider == "azure" and settings.azure_api_key and settings.azure_endpoint:
         inner = OpenAILLM(settings, azure=True)
+    elif provider == "groq" and settings.groq_api_key:
+        inner = OpenAILLM(settings, groq=True)
     elif provider == "xai" and settings.xai_api_key:
         inner = OpenAILLM(settings, xai=True)
     elif provider == "anthropic" and settings.anthropic_api_key:

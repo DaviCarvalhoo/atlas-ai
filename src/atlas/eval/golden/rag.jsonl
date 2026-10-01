@@ -26,7 +26,7 @@
 {"question": "Qual o prazo de primeira resposta para um chamado urgente?", "source": "sla-e-escalonamento.md", "answer_contains": "1 hora"}
 {"question": "Quais benefícios tem o cliente gold?", "source": "sla-e-escalonamento.md", "answer_contains": "especialista"}
 {"question": "Registrei reclamação no Reclame Aqui, para onde vai?", "source": "sla-e-escalonamento.md", "answer_contains": "ouvidoria"}
-{"question": "Posso parcelar em quantas vezes sem juros?", "source": "pagamentos-e-parcelamento.md", "answer_contains": "10x"}
+{"question": "Posso parcelar em quantas vezes sem juros?", "source": "pagamentos-e-parcelamento.md", "answer_contains": "10x", "aliases": ["10 vezes"]}
 {"question": "O QR code do pix venceu, e agora?", "source": "pagamentos-e-parcelamento.md", "answer_contains": "30 minutos"}
 {"question": "Meu pedido está em análise antifraude há dois dias", "source": "pagamentos-e-parcelamento.md", "answer_contains": "48 horas"}
 {"question": "Quais bandeiras de cartão são aceitas?", "source": "pagamentos-e-parcelamento.md", "answer_contains": "Elo"}

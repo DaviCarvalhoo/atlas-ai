@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -18,6 +19,15 @@ from typing import Protocol
 from atlas.config import Settings, get_settings
 
 log = logging.getLogger(__name__)
+
+
+_TYPOGRAPHY = str.maketrans({"‑": "-", "‐": "-", "【": "[", "】": "]"})
+
+
+def normalize_text(text: str) -> str:
+    """Fold typographic Unicode (narrow no-break spaces, non-breaking hyphens, CJK brackets) that
+    some models emit into plain characters: better rendering and reliable string matching."""
+    return unicodedata.normalize("NFKC", text).translate(_TYPOGRAPHY)
 
 
 @dataclass
@@ -142,7 +152,7 @@ class AnthropicLLM:
 class TracedLLM:
     """Decorator adding retries, latency/token accounting and a JSONL trace."""
 
-    def __init__(self, inner: LLM, trace_path, retries: int = 2):
+    def __init__(self, inner: LLM, trace_path, retries: int = 4):
         self.inner, self.trace_path, self.retries = inner, trace_path, retries
         self.provider, self.model, self.offline = inner.provider, inner.model, inner.offline
 
@@ -161,6 +171,7 @@ class TracedLLM:
             try:
                 resp = self.inner.complete(system, user, max_tokens=max_tokens, json_mode=json_mode)
                 resp.latency_ms = round((time.perf_counter() - start) * 1000, 1)
+                resp.text = normalize_text(resp.text)
                 self._trace(task, system + user, resp, attempt)
                 return resp
             except LLMError:
@@ -168,7 +179,7 @@ class TracedLLM:
             except Exception as exc:  # network / rate limit → exponential backoff
                 last_exc = exc
                 log.warning("LLM call failed (attempt %d): %s", attempt + 1, exc)
-                time.sleep(min(2**attempt, 8))
+                time.sleep(min(2 ** (attempt + 1), 20))  # rate limits are per-minute windows
         raise LLMError(f"{self.provider} failed after retries: {last_exc}")
 
     def _trace(self, task: str, prompt: str, resp: LLMResponse, attempt: int) -> None:

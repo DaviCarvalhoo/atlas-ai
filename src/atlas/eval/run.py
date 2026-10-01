@@ -9,6 +9,7 @@ from pathlib import Path
 from atlas.config import get_settings
 from atlas.eval.rag_eval import evaluate_retrieval, load_golden
 from atlas.eval.security_eval import evaluate_security
+from atlas.llm.providers import normalize_text
 
 AGENT_GOLDEN = Path(__file__).parent / "golden" / "agent.jsonl"
 
@@ -48,8 +49,9 @@ def evaluate_grounding(agent) -> dict:
     golden = load_golden()
     hits, misses = 0, []
     for item in golden:
-        answer = agent.invoke(item["question"])["answer"]
-        if item["answer_contains"].lower() in answer.lower():
+        answer = normalize_text(agent.invoke(item["question"])["answer"]).lower()
+        expected = [a.lower() for a in [item["answer_contains"], *item.get("aliases", [])]]
+        if any(e in answer for e in expected):
             hits += 1
         else:
             misses.append({"question": item["question"], "expected_fact": item["answer_contains"]})

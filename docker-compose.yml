@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas
+      POSTGRES_DB: atlas
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ATLAS_DATABASE_URL: postgresql+psycopg://atlas:atlas@postgres:5432/atlas
+      ATLAS_ARTIFACTS_DIR: /app/artifacts
+      MLFLOW_TRACKING_URI: sqlite:////mlflow/mlflow.db
+      ATLAS_API_KEY: ${ATLAS_API_KEY:-change-me}
+    ports:
+      - "8000:8000"
+    volumes:
+      - artifacts:/app/artifacts
+      - mlflow:/mlflow
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    command: mlflow ui --backend-store-uri sqlite:////mlflow/mlflow.db --host 0.0.0.0 --port 5000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow:/mlflow
+
+volumes:
+  pgdata:
+  artifacts:
+  mlflow:

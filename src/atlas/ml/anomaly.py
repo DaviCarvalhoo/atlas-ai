@@ -23,10 +23,12 @@ ORDER BY day
 
 
 def daily_matrix(long_df: pd.DataFrame) -> pd.DataFrame:
-    wide = (long_df.assign(day=pd.to_datetime(long_df["day"]))
-            .pivot_table(index="day", columns="category", values="n", aggfunc="sum", fill_value=0)
-            .reindex(columns=CATEGORIES, fill_value=0)
-            .asfreq("D", fill_value=0))
+    wide = (
+        long_df.assign(day=pd.to_datetime(long_df["day"]))
+        .pivot_table(index="day", columns="category", values="n", aggfunc="sum", fill_value=0)
+        .reindex(columns=CATEGORIES, fill_value=0)
+        .asfreq("D", fill_value=0)
+    )
     wide["total"] = wide[CATEGORIES].sum(axis=1)
     return wide
 
@@ -34,14 +36,16 @@ def daily_matrix(long_df: pd.DataFrame) -> pd.DataFrame:
 def build_features(wide: pd.DataFrame, window: int = 28) -> pd.DataFrame:
     """Robust z-score of each series against its trailing, weekday-adjusted baseline."""
     feats = pd.DataFrame(index=wide.index)
-    weekday_factor = wide["total"].groupby(wide.index.dayofweek).transform("mean") / wide["total"].mean()
+    weekday_factor = (
+        wide["total"].groupby(wide.index.dayofweek).transform("mean") / wide["total"].mean()
+    )
     for col in [*CATEGORIES, "total"]:
         adj = wide[col] / weekday_factor
         med = adj.shift(1).rolling(window, min_periods=7).median()
         mad = (adj.shift(1) - med).abs().rolling(window, min_periods=7).median()
         # Only spikes matter for incidents: clip negative deviations (quiet days are not alerts).
         feats[f"z_{col}"] = ((adj - med) / (1.4826 * mad + 1.0)).fillna(0.0).clip(lower=0.0)
-    feats["share_max"] = (wide[CATEGORIES].max(axis=1) / wide["total"].clip(lower=1))
+    feats["share_max"] = wide[CATEGORIES].max(axis=1) / wide["total"].clip(lower=1)
     return feats
 
 
@@ -61,8 +65,9 @@ class AnomalyDetector:
 
     def fit(self, feats: pd.DataFrame) -> AnomalyDetector:
         if self.method == "isolation_forest":
-            self.model = IsolationForest(n_estimators=300, contamination=self.contamination,
-                                         random_state=self.seed).fit(feats.values)
+            self.model = IsolationForest(
+                n_estimators=300, contamination=self.contamination, random_state=self.seed
+            ).fit(feats.values)
         return self
 
     def score(self, feats: pd.DataFrame) -> pd.DataFrame:
@@ -88,13 +93,24 @@ def detection_metrics(pred: pd.Series, truth_days: set[pd.Timestamp]) -> dict[st
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    return {"precision": round(precision, 3), "recall": round(recall, 3), "f1": round(f1, 3),
-            "tp": tp, "fp": fp, "fn": fn}
+    return {
+        "precision": round(precision, 3),
+        "recall": round(recall, 3),
+        "f1": round(f1, 3),
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+    }
 
 
 def top_anomalies(scored: pd.DataFrame, k: int = 10) -> list[dict]:
     rows = scored[scored["is_anomaly"]].sort_values("anomaly_score", ascending=False).head(k)
-    return [{"day": d.date().isoformat(), "score": round(float(r.anomaly_score), 3),
-             "driver_category": r.driver_category, "driver_z": float(r.driver_z)}
-            for d, r in rows.iterrows()]
-
+    return [
+        {
+            "day": d.date().isoformat(),
+            "score": round(float(r.anomaly_score), 3),
+            "driver_category": r.driver_category,
+            "driver_z": float(r.driver_z),
+        }
+        for d, r in rows.iterrows()
+    ]

@@ -16,11 +16,42 @@ import pandas as pd
 CATEGORIES = ["billing", "shipping", "technical", "account", "returns"]
 PRIORITIES = ["low", "medium", "high", "urgent"]
 
-FIRST_NAMES = ["Ana", "Bruno", "Carla", "Diego", "Eduarda", "Felipe", "Gabriela", "Heitor",
-               "Isabela", "João", "Larissa", "Marcos", "Natália", "Otávio", "Paula", "Rafael",
-               "Sofia", "Thiago", "Vitória", "Wagner"]
-LAST_NAMES = ["Silva", "Santos", "Oliveira", "Souza", "Lima", "Pereira", "Costa", "Almeida",
-              "Ferreira", "Rodrigues", "Gomes", "Martins"]
+FIRST_NAMES = [
+    "Ana",
+    "Bruno",
+    "Carla",
+    "Diego",
+    "Eduarda",
+    "Felipe",
+    "Gabriela",
+    "Heitor",
+    "Isabela",
+    "João",
+    "Larissa",
+    "Marcos",
+    "Natália",
+    "Otávio",
+    "Paula",
+    "Rafael",
+    "Sofia",
+    "Thiago",
+    "Vitória",
+    "Wagner",
+]
+LAST_NAMES = [
+    "Silva",
+    "Santos",
+    "Oliveira",
+    "Souza",
+    "Lima",
+    "Pereira",
+    "Costa",
+    "Almeida",
+    "Ferreira",
+    "Rodrigues",
+    "Gomes",
+    "Martins",
+]
 STATES = ["SP", "RJ", "MG", "PR", "RS", "SC", "BA", "PE", "GO", "DF", "CE", "ES"]
 CARRIERS = ["Correios", "Jadlog", "Loggi", "Total Express"]
 PAYMENTS = ["credit_card", "pix", "boleto", "debit_card"]
@@ -97,7 +128,11 @@ AMBIGUOUS = [
 ]
 
 OPENERS = ["", "", "Olá, ", "Bom dia, ", "Boa tarde. ", "Oi! ", "Prezados, "]
-URGENCY = [" É urgente!", " Vou abrir reclamação no Procon.", " Isso é um absurdo, preciso resolver hoje."]
+URGENCY = [
+    " É urgente!",
+    " Vou abrir reclamação no Procon.",
+    " Isso é um absurdo, preciso resolver hoje.",
+]
 CLOSERS = ["", "", " Obrigado.", " Aguardo retorno.", " Att."]
 
 # Incident scenarios: (category affected, multiplier, label)
@@ -130,52 +165,69 @@ def _customers(rng: np.random.Generator, n: int, start: date) -> pd.DataFrame:
     rows = []
     for cid in range(1, n + 1):
         first, last = rng.choice(FIRST_NAMES), rng.choice(LAST_NAMES)
-        rows.append({
-            "customer_id": cid,
-            "name": f"{first} {last}",
-            "email": f"{first.lower()}.{last.lower()}{cid}@example.com",
-            "cpf": _cpf(rng),
-            "phone": _phone(rng),
-            "state": rng.choice(STATES),
-            "tier": rng.choice(["standard", "silver", "gold"], p=[0.7, 0.2, 0.1]),
-            "signup_date": start - timedelta(days=int(rng.integers(0, 900))),
-        })
+        rows.append(
+            {
+                "customer_id": cid,
+                "name": f"{first} {last}",
+                "email": f"{first.lower()}.{last.lower()}{cid}@example.com",
+                "cpf": _cpf(rng),
+                "phone": _phone(rng),
+                "state": rng.choice(STATES),
+                "tier": rng.choice(["standard", "silver", "gold"], p=[0.7, 0.2, 0.1]),
+                "signup_date": start - timedelta(days=int(rng.integers(0, 900))),
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def _orders(rng: np.random.Generator, customers: pd.DataFrame, n: int, start: date,
-            days: int) -> pd.DataFrame:
+def _orders(
+    rng: np.random.Generator, customers: pd.DataFrame, n: int, start: date, days: int
+) -> pd.DataFrame:
     rows = []
     for oid in range(1, n + 1):
         created = datetime.combine(start, datetime.min.time()) + timedelta(
-            days=int(rng.integers(0, days)), minutes=int(rng.integers(0, 1440)))
+            days=int(rng.integers(0, days)), minutes=int(rng.integers(0, 1440))
+        )
         eta = created.date() + timedelta(days=int(rng.integers(3, 12)))
-        status = rng.choice(["delivered", "shipped", "processing", "cancelled", "returned"],
-                            p=[0.68, 0.15, 0.08, 0.05, 0.04])
+        status = rng.choice(
+            ["delivered", "shipped", "processing", "cancelled", "returned"],
+            p=[0.68, 0.15, 0.08, 0.05, 0.04],
+        )
         carrier = str(rng.choice(CARRIERS))
         late = rng.random() < CARRIER_LATE_RATE[carrier]
         delay = int(rng.choice([1, 2, 3, 5, 9])) if late else 0
-        rows.append({
-            "order_id": 10000 + oid,
-            "customer_id": int(rng.integers(1, len(customers) + 1)),
-            "created_at": created,
-            "status": status,
-            "total_value": round(float(rng.lognormal(5.0, 0.7)), 2),
-            "payment_method": rng.choice(PAYMENTS, p=[0.5, 0.3, 0.1, 0.1]),
-            "carrier": carrier,
-            "estimated_delivery": eta,
-            "delivered_at": eta + timedelta(days=delay) if status == "delivered" else None,
-        })
+        rows.append(
+            {
+                "order_id": 10000 + oid,
+                "customer_id": int(rng.integers(1, len(customers) + 1)),
+                "created_at": created,
+                "status": status,
+                "total_value": round(float(rng.lognormal(5.0, 0.7)), 2),
+                "payment_method": rng.choice(PAYMENTS, p=[0.5, 0.3, 0.1, 0.1]),
+                "carrier": carrier,
+                "estimated_delivery": eta,
+                "delivered_at": eta + timedelta(days=delay) if status == "delivered" else None,
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def _ticket_text(rng: np.random.Generator, category: str, order_id: int, carrier: str,
-                 state: str, pii: dict[str, str]) -> tuple[str, bool]:
+def _ticket_text(
+    rng: np.random.Generator,
+    category: str,
+    order_id: int,
+    carrier: str,
+    state: str,
+    pii: dict[str, str],
+) -> tuple[str, bool]:
     pool = TEMPLATES[category] + (AMBIGUOUS if rng.random() < 0.08 else [])
-    body = rng.choice(pool).format(order=order_id, days=int(rng.integers(2, 20)),
-                                   carrier=carrier, state=state)
+    body = rng.choice(pool).format(
+        order=order_id, days=int(rng.integers(2, 20)), carrier=carrier, state=state
+    )
     urgent = rng.random() < 0.12
-    text = rng.choice(OPENERS) + body + (rng.choice(URGENCY) if urgent else "") + rng.choice(CLOSERS)
+    text = (
+        rng.choice(OPENERS) + body + (rng.choice(URGENCY) if urgent else "") + rng.choice(CLOSERS)
+    )
     # ~15% of customers paste personal data into the message (must be masked before any LLM).
     if rng.random() < 0.15:
         key = rng.choice(["email", "cpf", "phone"])
@@ -184,7 +236,9 @@ def _ticket_text(rng: np.random.Generator, category: str, order_id: int, carrier
 
 
 def _priority(rng: np.random.Generator, category: str, urgent: bool, tier: str) -> str:
-    score = {"billing": 1.2, "account": 1.1, "shipping": 1.0, "technical": 0.9, "returns": 0.6}[category]
+    score = {"billing": 1.2, "account": 1.1, "shipping": 1.0, "technical": 0.9, "returns": 0.6}[
+        category
+    ]
     score += 1.6 if urgent else 0.0
     score += {"gold": 0.6, "silver": 0.3, "standard": 0.0}[tier]
     score += rng.normal(0, 0.35)
@@ -197,21 +251,30 @@ def _priority(rng: np.random.Generator, category: str, urgent: bool, tier: str) 
     return "low"
 
 
-def generate(seed: int = 42, n_customers: int = 1500, n_orders: int = 6000,
-             days: int = 365, start: date = date(2025, 9, 1)) -> SyntheticDataset:
+def generate(
+    seed: int = 42,
+    n_customers: int = 1500,
+    n_orders: int = 6000,
+    days: int = 365,
+    start: date = date(2025, 9, 1),
+) -> SyntheticDataset:
     rng = np.random.default_rng(seed)
     customers = _customers(rng, n_customers, start)
     orders = _orders(rng, customers, n_orders, start, days)
 
     # Daily volume: base + weekly seasonality (Mondays heavier, Sundays lighter) + incidents.
-    incident_days = sorted(rng.choice(np.arange(20, days), size=10, replace=False).tolist())
+    n_incidents = min(10, max(1, days // 36))
+    incident_days = sorted(
+        rng.choice(np.arange(min(20, days // 2), days), size=n_incidents, replace=False).tolist()
+    )
     incident_rows = []
     incident_map: dict[int, tuple[str, float]] = {}
     for d in incident_days:
         cat, mult, label = INCIDENTS[int(rng.integers(0, len(INCIDENTS)))]
         incident_map[int(d)] = (cat, mult)
-        incident_rows.append({"date": start + timedelta(days=int(d)), "category": cat,
-                              "description": label})
+        incident_rows.append(
+            {"date": start + timedelta(days=int(d)), "category": cat, "description": label}
+        )
 
     base_mix = np.array([0.24, 0.30, 0.16, 0.14, 0.16])
     weekday_factor = [1.25, 1.1, 1.0, 1.0, 0.95, 0.8, 0.65]
@@ -234,10 +297,17 @@ def generate(seed: int = 42, n_customers: int = 1500, n_orders: int = 6000,
             cid = int(rng.integers(1, n_customers + 1))
             cust = customers_idx.loc[cid]
             if cid in orders_by_customer.groups and rng.random() < 0.85:
-                order = orders_by_customer.get_group(cid).sample(1, random_state=int(rng.integers(1e9))).iloc[0]
+                order = (
+                    orders_by_customer.get_group(cid)
+                    .sample(1, random_state=int(rng.integers(1e9)))
+                    .iloc[0]
+                )
                 order_id, carrier = int(order["order_id"]), str(order["carrier"])
             else:
-                order_id, carrier = int(rng.integers(10001, 10000 + n_orders)), str(rng.choice(CARRIERS))
+                order_id, carrier = (
+                    int(rng.integers(10001, 10000 + n_orders)),
+                    str(rng.choice(CARRIERS)),
+                )
             pii = {"email": cust["email"], "cpf": cust["cpf"], "phone": cust["phone"]}
             body, urgent = _ticket_text(rng, category, order_id, carrier, cust["state"], pii)
             priority = _priority(rng, category, urgent, cust["tier"])
@@ -246,25 +316,30 @@ def generate(seed: int = 42, n_customers: int = 1500, n_orders: int = 6000,
             if rng.random() < 0.05:  # annotation noise, as in real labelled data
                 label = str(rng.choice(CATEGORIES))
             created = datetime.combine(day, datetime.min.time()) + timedelta(
-                minutes=int(rng.integers(0, 1440)))
+                minutes=int(rng.integers(0, 1440))
+            )
             resolved = rng.random() < 0.92
             hours = float(rng.gamma(2.0, RESOLUTION_MEAN_H[priority] / 2.0))
             breached = hours > SLA_TARGET_H[priority]
             csat_mean = 4.3 - 0.5 * urgent - 1.1 * breached + (0.2 if channel == "chat" else 0.0)
-            tickets.append({
-                "ticket_id": tid,
-                "customer_id": cid,
-                "order_id": order_id,
-                "created_at": created,
-                "channel": channel,
-                "subject": body.split(",")[0][:60],
-                "body": body,
-                "category": label,
-                "priority": priority,
-                "status": "resolved" if resolved else rng.choice(["open", "pending"]),
-                "resolution_hours": round(hours, 1) if resolved else None,
-                "csat": int(np.clip(round(rng.normal(csat_mean, 0.8)), 1, 5)) if resolved else None,
-            })
+            tickets.append(
+                {
+                    "ticket_id": tid,
+                    "customer_id": cid,
+                    "order_id": order_id,
+                    "created_at": created,
+                    "channel": channel,
+                    "subject": body.split(",")[0][:60],
+                    "body": body,
+                    "category": label,
+                    "priority": priority,
+                    "status": "resolved" if resolved else rng.choice(["open", "pending"]),
+                    "resolution_hours": round(hours, 1) if resolved else None,
+                    "csat": int(np.clip(round(rng.normal(csat_mean, 0.8)), 1, 5))
+                    if resolved
+                    else None,
+                }
+            )
             tid += 1
 
     return SyntheticDataset(customers, orders, pd.DataFrame(tickets), pd.DataFrame(incident_rows))

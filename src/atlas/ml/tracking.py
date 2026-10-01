@@ -43,8 +43,9 @@ class Tracker:
 
     def log_metrics(self, metrics: dict) -> None:
         if self.enabled:
-            mlflow.log_metrics({k: float(v) for k, v in metrics.items()
-                                if isinstance(v, int | float)})
+            mlflow.log_metrics(
+                {k: float(v) for k, v in metrics.items() if isinstance(v, int | float)}
+            )
 
     def log_artifact(self, path: Path) -> None:
         if self.enabled:

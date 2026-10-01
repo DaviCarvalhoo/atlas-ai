@@ -24,10 +24,14 @@ class NamedQuery:
 @lru_cache
 def load_queries(path: Path = ANALYTICS_PATH) -> dict[str, NamedQuery]:
     queries = {}
-    for block in re.split(r"^-- name:\s*", path.read_text(encoding="utf-8"), flags=re.MULTILINE)[1:]:
+    for block in re.split(r"^-- name:\s*", path.read_text(encoding="utf-8"), flags=re.MULTILINE)[
+        1:
+    ]:
         name, _, rest = block.partition("\n")
         desc = re.search(r"^-- description:\s*(.+)$", rest, re.MULTILINE)
-        sql = "\n".join(ln for ln in rest.splitlines() if not ln.startswith("--")).strip().rstrip(";")
+        sql = (
+            "\n".join(ln for ln in rest.splitlines() if not ln.startswith("--")).strip().rstrip(";")
+        )
         queries[name.strip()] = NamedQuery(name.strip(), desc.group(1).strip() if desc else "", sql)
     return queries
 

@@ -30,8 +30,9 @@ class ModelVersion:
 
 def _git_sha() -> str | None:
     try:
-        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
-                                       stderr=subprocess.DEVNULL, text=True).strip()
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
     except Exception:
         return None
 
@@ -49,14 +50,29 @@ class ModelRegistry:
             return []
         return sorted(int(p.name[1:]) for p in d.glob("v*") if p.name[1:].isdigit())
 
-    def register(self, name: str, model: Any, metrics: dict, params: dict,
-                 data_fingerprint: str, promote: bool = True) -> ModelVersion:
+    def register(
+        self,
+        name: str,
+        model: Any,
+        metrics: dict,
+        params: dict,
+        data_fingerprint: str,
+        promote: bool = True,
+    ) -> ModelVersion:
         version = (self.versions(name) or [0])[-1] + 1
         vdir = self._dir(name) / f"v{version}"
         vdir.mkdir(parents=True, exist_ok=True)
         joblib.dump(model, vdir / "model.joblib")
-        mv = ModelVersion(name, version, datetime.now(UTC).isoformat(), metrics, params,
-                          data_fingerprint, _git_sha(), str(vdir / "model.joblib"))
+        mv = ModelVersion(
+            name,
+            version,
+            datetime.now(UTC).isoformat(),
+            metrics,
+            params,
+            data_fingerprint,
+            _git_sha(),
+            str(vdir / "model.joblib"),
+        )
         (vdir / "metadata.json").write_text(json.dumps(asdict(mv), indent=2), encoding="utf-8")
         if promote:
             self.promote(name, version)

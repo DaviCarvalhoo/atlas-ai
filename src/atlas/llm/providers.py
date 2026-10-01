@@ -39,8 +39,9 @@ class LLM(Protocol):
     model: str
     offline: bool
 
-    def complete(self, system: str, user: str, *, max_tokens: int = 1024,
-                 json_mode: bool = False) -> LLMResponse: ...
+    def complete(
+        self, system: str, user: str, *, max_tokens: int = 1024, json_mode: bool = False
+    ) -> LLMResponse: ...
 
 
 class OfflineLLM:
@@ -48,8 +49,9 @@ class OfflineLLM:
 
     provider, model, offline = "offline", "rule-based", True
 
-    def complete(self, system: str, user: str, *, max_tokens: int = 1024,
-                 json_mode: bool = False) -> LLMResponse:
+    def complete(
+        self, system: str, user: str, *, max_tokens: int = 1024, json_mode: bool = False
+    ) -> LLMResponse:
         return LLMResponse(text="", provider=self.provider, model=self.model)
 
 
@@ -60,9 +62,11 @@ class OpenAILLM:
         if azure:
             from openai import AzureOpenAI
 
-            self.client = AzureOpenAI(api_key=settings.azure_api_key,
-                                      azure_endpoint=settings.azure_endpoint,
-                                      api_version=settings.azure_api_version)
+            self.client = AzureOpenAI(
+                api_key=settings.azure_api_key,
+                azure_endpoint=settings.azure_endpoint,
+                api_version=settings.azure_api_version,
+            )
             self.provider, self.model = "azure", settings.azure_deployment or ""
         else:
             from openai import OpenAI
@@ -70,8 +74,9 @@ class OpenAILLM:
             self.client = OpenAI(api_key=settings.openai_api_key)
             self.provider, self.model = "openai", settings.openai_model
 
-    def complete(self, system: str, user: str, *, max_tokens: int = 1024,
-                 json_mode: bool = False) -> LLMResponse:
+    def complete(
+        self, system: str, user: str, *, max_tokens: int = 1024, json_mode: bool = False
+    ) -> LLMResponse:
         resp = self.client.chat.completions.create(
             model=self.model,
             max_tokens=max_tokens,
@@ -79,9 +84,13 @@ class OpenAILLM:
             response_format={"type": "json_object"} if json_mode else None,
         )
         usage = resp.usage
-        return LLMResponse(resp.choices[0].message.content or "", self.provider, self.model,
-                           usage.prompt_tokens if usage else 0,
-                           usage.completion_tokens if usage else 0)
+        return LLMResponse(
+            resp.choices[0].message.content or "",
+            self.provider,
+            self.model,
+            usage.prompt_tokens if usage else 0,
+            usage.completion_tokens if usage else 0,
+        )
 
 
 class AnthropicLLM:
@@ -93,8 +102,9 @@ class AnthropicLLM:
         self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3)
         self.model = settings.anthropic_model
 
-    def complete(self, system: str, user: str, *, max_tokens: int = 1024,
-                 json_mode: bool = False) -> LLMResponse:
+    def complete(
+        self, system: str, user: str, *, max_tokens: int = 1024, json_mode: bool = False
+    ) -> LLMResponse:
         if json_mode:
             system += "\n\nRespond with a single valid JSON object and nothing else."
         resp = self.client.beta.messages.create(
@@ -112,8 +122,9 @@ class AnthropicLLM:
         if resp.stop_reason == "refusal":
             raise LLMError("The model declined this request.")
         text = "".join(b.text for b in resp.content if b.type == "text")
-        return LLMResponse(text, self.provider, resp.model, resp.usage.input_tokens,
-                           resp.usage.output_tokens)
+        return LLMResponse(
+            text, self.provider, resp.model, resp.usage.input_tokens, resp.usage.output_tokens
+        )
 
 
 class TracedLLM:
@@ -123,8 +134,15 @@ class TracedLLM:
         self.inner, self.trace_path, self.retries = inner, trace_path, retries
         self.provider, self.model, self.offline = inner.provider, inner.model, inner.offline
 
-    def complete(self, system: str, user: str, *, max_tokens: int = 1024,
-                 json_mode: bool = False, task: str = "generic") -> LLMResponse:
+    def complete(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int = 1024,
+        json_mode: bool = False,
+        task: str = "generic",
+    ) -> LLMResponse:
         last_exc: Exception | None = None
         for attempt in range(self.retries + 1):
             start = time.perf_counter()
@@ -138,15 +156,19 @@ class TracedLLM:
             except Exception as exc:  # network / rate limit → exponential backoff
                 last_exc = exc
                 log.warning("LLM call failed (attempt %d): %s", attempt + 1, exc)
-                time.sleep(min(2 ** attempt, 8))
+                time.sleep(min(2**attempt, 8))
         raise LLMError(f"{self.provider} failed after retries: {last_exc}")
 
     def _trace(self, task: str, prompt: str, resp: LLMResponse, attempt: int) -> None:
         if self.offline:
             return
-        record = {"ts": datetime.now(UTC).isoformat(), "task": task, "attempt": attempt,
-                  "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:16],
-                  **{k: v for k, v in asdict(resp).items() if k != "text"}}
+        record = {
+            "ts": datetime.now(UTC).isoformat(),
+            "task": task,
+            "attempt": attempt,
+            "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:16],
+            **{k: v for k, v in asdict(resp).items() if k != "text"},
+        }
         self.trace_path.parent.mkdir(parents=True, exist_ok=True)
         with self.trace_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
@@ -163,8 +185,9 @@ def build_llm(settings: Settings | None = None) -> TracedLLM:
         inner = AnthropicLLM(settings)
     else:
         if provider != "offline":
-            log.warning("Provider '%s' selected but credentials missing — using offline mode.",
-                        provider)
+            log.warning(
+                "Provider '%s' selected but credentials missing — using offline mode.", provider
+            )
         inner = OfflineLLM()
     return TracedLLM(inner, settings.artifacts_dir / "traces" / "llm_calls.jsonl")
 

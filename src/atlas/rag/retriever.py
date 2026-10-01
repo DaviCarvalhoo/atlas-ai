@@ -40,8 +40,9 @@ class RetrievedChunk:
 
 def _client(settings: Settings) -> chromadb.ClientAPI:
     settings.vector_dir.mkdir(parents=True, exist_ok=True)
-    return chromadb.PersistentClient(path=str(settings.vector_dir),
-                                     settings=ChromaSettings(anonymized_telemetry=False))
+    return chromadb.PersistentClient(
+        path=str(settings.vector_dir), settings=ChromaSettings(anonymized_telemetry=False)
+    )
 
 
 def build_index(settings: Settings | None = None, extra_corpus: list[str] | None = None) -> dict:
@@ -55,22 +56,38 @@ def build_index(settings: Settings | None = None, extra_corpus: list[str] | None
     client = _client(settings)
     if COLLECTION in [c.name for c in client.list_collections()]:
         client.delete_collection(COLLECTION)
-    col = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine",
-                                                         "embedder": embedder.name})
-    col.add(ids=[c.id for c in chunks], embeddings=vectors.tolist(), documents=[c.text for c in chunks],
-            metadatas=[{"source": c.source, "title": c.title, "section": c.section} for c in chunks])
+    col = client.create_collection(
+        COLLECTION, metadata={"hnsw:space": "cosine", "embedder": embedder.name}
+    )
+    col.add(
+        ids=[c.id for c in chunks],
+        embeddings=vectors.tolist(),
+        documents=[c.text for c in chunks],
+        metadatas=[{"source": c.source, "title": c.title, "section": c.section} for c in chunks],
+    )
 
-    # Character n-grams act as a light stemmer for Portuguese ("prazo"/"prazos", "devolver"/"devolução").
-    keyword = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True,
-                              strip_accents="unicode")
+    # Char n-grams act as a light Portuguese stemmer ("prazo"/"prazos", "devolver"/"devolução").
+    keyword = TfidfVectorizer(
+        analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True, strip_accents="unicode"
+    )
     keyword_matrix = keyword.fit_transform(texts)
     (settings.artifacts_dir / "embeddings").mkdir(parents=True, exist_ok=True)
-    joblib.dump({"vectorizer": keyword, "matrix": keyword_matrix, "chunks": chunks},
-                settings.artifacts_dir / "embeddings" / "keyword.joblib")
-    log.info("Indexed %d chunks from %s with %s embeddings", len(chunks),
-             settings.knowledge_base_dir, embedder.name)
-    return {"chunks": len(chunks), "documents": len({c.source for c in chunks}),
-            "embedder": embedder.name, "dims": int(vectors.shape[1])}
+    joblib.dump(
+        {"vectorizer": keyword, "matrix": keyword_matrix, "chunks": chunks},
+        settings.artifacts_dir / "embeddings" / "keyword.joblib",
+    )
+    log.info(
+        "Indexed %d chunks from %s with %s embeddings",
+        len(chunks),
+        settings.knowledge_base_dir,
+        embedder.name,
+    )
+    return {
+        "chunks": len(chunks),
+        "documents": len({c.source for c in chunks}),
+        "embedder": embedder.name,
+        "dims": int(vectors.shape[1]),
+    }
 
 
 class Retriever:
@@ -89,12 +106,15 @@ class Retriever:
         return [(i, 1.0 - d) for i, d in zip(res["ids"][0], res["distances"][0], strict=True)]
 
     def _keyword(self, query: str, n: int) -> list[tuple[str, float]]:
-        scores = (self.keyword_matrix @ self.keyword_vectorizer.transform([query]).T).toarray().ravel()
+        scores = (
+            (self.keyword_matrix @ self.keyword_vectorizer.transform([query]).T).toarray().ravel()
+        )
         top = np.argsort(-scores)[:n]
         return [(self.chunks[i].id, float(scores[i])) for i in top if scores[i] > 0]
 
-    def search(self, query: str, k: int = 4, mode: Mode = "hybrid",
-               boost_sources: set[str] | None = None) -> list[RetrievedChunk]:
+    def search(
+        self, query: str, k: int = 4, mode: Mode = "hybrid", boost_sources: set[str] | None = None
+    ) -> list[RetrievedChunk]:
         """``boost_sources``: documents favoured by metadata (e.g. the ticket's predicted
         category). Applied as an extra ranking in the fusion, so it nudges but never filters."""
         if mode == "dense":

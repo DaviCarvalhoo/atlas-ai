@@ -38,9 +38,26 @@ log = logging.getLogger(__name__)
 
 Intent = Literal["order_lookup", "analytics", "knowledge"]
 
-ANALYTICS_HINTS = ("quantos", "quantas", "taxa", "media", "percentual", "ranking", "volume",
-                   "por categoria", "por canal", "por prioridade", "por mes", "csat", "sla",
-                   "tendencia", "evolucao", "transportadora com", "mais atras", "relatorio")
+ANALYTICS_HINTS = (
+    "quantos",
+    "quantas",
+    "taxa",
+    "media",
+    "percentual",
+    "ranking",
+    "volume",
+    "por categoria",
+    "por canal",
+    "por prioridade",
+    "por mes",
+    "csat",
+    "sla",
+    "tendencia",
+    "evolucao",
+    "transportadora com",
+    "mais atras",
+    "relatorio",
+)
 
 
 # Triage category → knowledge-base documents most likely to hold the answer.
@@ -89,11 +106,17 @@ class SupportAgent:
         g.add_node("answer", self.answer)
 
         g.set_entry_point("guard")
-        g.add_conditional_edges("guard", lambda s: "end" if s.get("blocked") else "triage",
-                                {"end": END, "triage": "triage"})
+        g.add_conditional_edges(
+            "guard",
+            lambda s: "end" if s.get("blocked") else "triage",
+            {"end": END, "triage": "triage"},
+        )
         g.add_edge("triage", "route")
-        g.add_conditional_edges("route", lambda s: s["intent"], {
-            "order_lookup": "order_lookup", "analytics": "analytics", "knowledge": "retrieve"})
+        g.add_conditional_edges(
+            "route",
+            lambda s: s["intent"],
+            {"order_lookup": "order_lookup", "analytics": "analytics", "knowledge": "retrieve"},
+        )
         g.add_edge("order_lookup", "retrieve")
         g.add_edge("analytics", "answer")
         g.add_edge("retrieve", "answer")
@@ -109,17 +132,32 @@ class SupportAgent:
         verdict = check_input(masked.text)
         steps = [*state["steps"], f"guard: pii={masked.found or 'none'} allowed={verdict.allowed}"]
         if not verdict.allowed:
-            return {"question": masked.text, "pii_found": masked.found, "blocked": True,
-                    "steps": steps, "citations": [], "intent": "knowledge",
-                    "answer": "Não posso processar esta solicitação por motivos de segurança "
-                              f"({verdict.reason}). Um atendente humano pode ajudar."}
-        return {"question": masked.text, "pii_found": masked.found, "blocked": False,
-                "steps": steps}
+            return {
+                "question": masked.text,
+                "pii_found": masked.found,
+                "blocked": True,
+                "steps": steps,
+                "citations": [],
+                "intent": "knowledge",
+                "answer": "Não posso processar esta solicitação por motivos de segurança "
+                f"({verdict.reason}). Um atendente humano pode ajudar.",
+            }
+        return {
+            "question": masked.text,
+            "pii_found": masked.found,
+            "blocked": False,
+            "steps": steps,
+        }
 
     def triage(self, state: AgentState) -> AgentState:
         t = self.triage_service.classify(state["question"])
-        return {"triage": asdict(t),
-                "steps": [*state["steps"], f"triage: {t.category}/{t.priority} ({t.category_confidence})"]}
+        return {
+            "triage": asdict(t),
+            "steps": [
+                *state["steps"],
+                f"triage: {t.category}/{t.priority} ({t.category_confidence})",
+            ],
+        }
 
     def route(self, state: AgentState) -> AgentState:
         q = state["question"]
@@ -127,8 +165,9 @@ class SupportAgent:
         intent: Intent | None = None
         if not self.llm.offline:
             try:
-                resp = self.llm.complete(ROUTER_SYSTEM, q, max_tokens=200, json_mode=True,
-                                         task="route")
+                resp = self.llm.complete(
+                    ROUTER_SYSTEM, q, max_tokens=200, json_mode=True, task="route"
+                )
                 data = _parse_json(resp.text)
                 if data.get("intent") in ("order_lookup", "analytics", "knowledge"):
                     intent = data["intent"]
@@ -137,8 +176,11 @@ class SupportAgent:
                 log.warning("LLM routing failed, falling back to heuristics: %s", exc)
         if intent is None:
             intent = self._heuristic_route(q, order_id)
-        return {"intent": intent, "order_id": order_id,
-                "steps": [*state["steps"], f"route: {intent} (order_id={order_id})"]}
+        return {
+            "intent": intent,
+            "order_id": order_id,
+            "steps": [*state["steps"], f"route: {intent} (order_id={order_id})"],
+        }
 
     @staticmethod
     def _heuristic_route(question: str, order_id: int | None) -> Intent:
@@ -150,17 +192,23 @@ class SupportAgent:
         return "knowledge"
 
     def order_lookup(self, state: AgentState) -> AgentState:
-        order = tools.lookup_order(state["order_id"], state.get("customer_id")) \
-            if state.get("order_id") else None
-        return {"order": order,
-                "steps": [*state["steps"], f"order_lookup: {'found' if order else 'not found'}"]}
+        order = (
+            tools.lookup_order(state["order_id"], state.get("customer_id"))
+            if state.get("order_id")
+            else None
+        )
+        return {
+            "order": order,
+            "steps": [*state["steps"], f"order_lookup: {'found' if order else 'not found'}"],
+        }
 
     def analytics(self, state: AgentState) -> AgentState:
         q, sql, df = state["question"], None, pd.DataFrame()
         try:
             if not self.llm.offline:
-                resp = self.llm.complete(SQL_SYSTEM, q, max_tokens=500, json_mode=True,
-                                         task="text_to_sql")
+                resp = self.llm.complete(
+                    SQL_SYSTEM, q, max_tokens=500, json_mode=True, task="text_to_sql"
+                )
                 sql, df = tools.run_sql(_parse_json(resp.text)["sql"])
             else:
                 name = tools.analytics_query_for(q)
@@ -168,46 +216,76 @@ class SupportAgent:
                     sql, df = tools.run_named_analytics(name)
         except (UnsafeSQLError, KeyError, ValueError) as exc:
             log.warning("text-to-SQL rejected: %s", exc)
-            return {"sql": None, "rows": [],
-                    "steps": [*state["steps"], f"analytics: rejected ({exc})"]}
-        return {"sql": sql, "rows": df.head(50).to_dict(orient="records"),
-                "steps": [*state["steps"], f"analytics: {len(df)} rows"]}
+            return {
+                "sql": None,
+                "rows": [],
+                "steps": [*state["steps"], f"analytics: rejected ({exc})"],
+            }
+        return {
+            "sql": sql,
+            "rows": df.head(50).to_dict(orient="records"),
+            "steps": [*state["steps"], f"analytics: {len(df)} rows"],
+        }
 
     def retrieve(self, state: AgentState) -> AgentState:
         query = state["question"]
         if state.get("order"):  # enrich the query so the policy for this situation is retrieved
             o = state["order"]
-            query += " atraso entrega" if (o.get("days_late") or 0) > 0 else f" pedido {o['status']}"
+            query += (
+                " atraso entrega" if (o.get("days_late") or 0) > 0 else f" pedido {o['status']}"
+            )
         triage = state.get("triage") or {}
-        boost = (CATEGORY_SOURCES.get(triage.get("category"))
-                 if triage.get("category_confidence", 0) >= CATEGORY_BOOST_MIN_CONFIDENCE else None)
+        boost = (
+            CATEGORY_SOURCES.get(triage.get("category"))
+            if triage.get("category_confidence", 0) >= CATEGORY_BOOST_MIN_CONFIDENCE
+            else None
+        )
         chunks = self.retriever.search(query, k=self.k, boost_sources=boost)
-        return {"chunks": chunks,
-                "steps": [*state["steps"], f"retrieve: {[c.citation() for c in chunks[:3]]}"]}
+        return {
+            "chunks": chunks,
+            "steps": [*state["steps"], f"retrieve: {[c.citation() for c in chunks[:3]]}"],
+        }
 
     def answer(self, state: AgentState) -> AgentState:
         context, citations = self._context(state)
-        llm_meta: dict[str, Any] = {"provider": self.llm.provider, "model": self.llm.model,
-                                    "prompt_version": PROMPT_VERSION}
+        llm_meta: dict[str, Any] = {
+            "provider": self.llm.provider,
+            "model": self.llm.model,
+            "prompt_version": PROMPT_VERSION,
+        }
         if state["intent"] == "analytics":
             text = _analytics_answer(state.get("rows", []), state.get("sql"))
         elif self.llm.offline:
-            text = _extractive_answer(state["question"], state.get("order"),
-                                      state.get("chunks", []))
+            text = _extractive_answer(
+                state["question"], state.get("order"), state.get("chunks", [])
+            )
         else:
-            resp = self.llm.complete(ANSWER_SYSTEM, answer_user_prompt(state["question"], context),
-                                     max_tokens=700, task="answer")
+            resp = self.llm.complete(
+                ANSWER_SYSTEM,
+                answer_user_prompt(state["question"], context),
+                max_tokens=700,
+                task="answer",
+            )
             text = resp.text
-            llm_meta.update(latency_ms=resp.latency_ms, input_tokens=resp.input_tokens,
-                            output_tokens=resp.output_tokens)
-        return {"answer": text, "citations": citations, "llm": llm_meta,
-                "steps": [*state["steps"], "answer: done"]}
+            llm_meta.update(
+                latency_ms=resp.latency_ms,
+                input_tokens=resp.input_tokens,
+                output_tokens=resp.output_tokens,
+            )
+        return {
+            "answer": text,
+            "citations": citations,
+            "llm": llm_meta,
+            "steps": [*state["steps"], "answer: done"],
+        }
 
     @staticmethod
     def _context(state: AgentState) -> tuple[list[str], list[str]]:
         blocks, cites = [], []
         if order := state.get("order"):
-            blocks.append("Dados do pedido (banco de dados): " + json.dumps(order, ensure_ascii=False))
+            blocks.append(
+                "Dados do pedido (banco de dados): " + json.dumps(order, ensure_ascii=False)
+            )
             cites.append(f"orders#{order['order_id']}")
         for c in state.get("chunks", []):
             blocks.append(f"{c.title} — {c.section}: {c.text}")
@@ -229,13 +307,20 @@ def _sentences(text: str) -> list[str]:
 
 
 def _extractive_answer(question: str, order: dict | None, chunks: list[RetrievedChunk]) -> str:
-    """Offline, deterministic answer: order facts + best-matching policy sentences, with citations."""
+    """Offline, deterministic answer: order facts + best-matching policy sentences + citations."""
     lines = []
     if order:
-        status = {"delivered": "entregue", "shipped": "em transporte", "processing": "processando",
-                  "cancelled": "cancelado", "returned": "devolvido"}.get(order["status"], order["status"])
-        line = (f"O pedido {order['order_id']} está **{status}** (transportadora {order['carrier']}, "
-                f"previsão {str(order['estimated_delivery'])[:10]})")
+        status = {
+            "delivered": "entregue",
+            "shipped": "em transporte",
+            "processing": "processando",
+            "cancelled": "cancelado",
+            "returned": "devolvido",
+        }.get(order["status"], order["status"])
+        line = (
+            f"O pedido {order['order_id']} está **{status}** (transportadora {order['carrier']}, "
+            f"previsão {str(order['estimated_delivery'])[:10]})"
+        )
         if order.get("days_late"):
             line += f", entregue com {order['days_late']} dia(s) de atraso"
         lines.append(line + ".")
@@ -249,18 +334,27 @@ def _extractive_answer(question: str, order: dict | None, chunks: list[Retrieved
     for _, rank, sentence in best:
         lines.append(f"{sentence} [{rank + 1 + (1 if order else 0)}]")
     if not lines:
-        return ("Não encontrei essa informação na base de conhecimento. "
-                "Vou encaminhar para um atendente humano.")
+        return (
+            "Não encontrei essa informação na base de conhecimento. "
+            "Vou encaminhar para um atendente humano."
+        )
     return " ".join(lines)
 
 
 def _analytics_answer(rows: list[dict], sql: str | None) -> str:
     if not rows:
-        return ("Não consegui responder com segurança a essa pergunta analítica. "
-                "Tente reformular (ex.: 'taxa de violação de SLA por prioridade').")
+        return (
+            "Não consegui responder com segurança a essa pergunta analítica. "
+            "Tente reformular (ex.: 'taxa de violação de SLA por prioridade')."
+        )
     cols = list(rows[0])
     table = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
-    table += ["| " + " | ".join("" if pd.isna(r[c]) else str(r[c]) for c in cols) + " |"
-              for r in rows[:20]]
-    return (f"Resultado ({len(rows)} linhas):\n\n" + "\n".join(table)
-            + f"\n\nSQL executado:\n```sql\n{sql}\n```")
+    table += [
+        "| " + " | ".join("" if pd.isna(r[c]) else str(r[c]) for c in cols) + " |"
+        for r in rows[:20]
+    ]
+    return (
+        f"Resultado ({len(rows)} linhas):\n\n"
+        + "\n".join(table)
+        + f"\n\nSQL executado:\n```sql\n{sql}\n```"
+    )

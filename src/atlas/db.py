@@ -41,7 +41,9 @@ def load_frames(engine: Engine, frames: dict[str, pd.DataFrame]) -> None:
         frames[name].to_sql(name, engine, if_exists="append", index=False, chunksize=2000)
 
 
-def read_only_query(sql: str, params: dict | None = None, engine: Engine | None = None) -> pd.DataFrame:
+def read_only_query(
+    sql: str, params: dict | None = None, engine: Engine | None = None
+) -> pd.DataFrame:
     """Run a query inside a read-only transaction (defense in depth on top of the SQL guard)."""
     engine = engine or get_engine()
     with engine.connect() as conn:

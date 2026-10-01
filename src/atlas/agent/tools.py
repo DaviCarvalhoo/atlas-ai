@@ -21,9 +21,67 @@ WHERE o.order_id = :order_id
 
 ORDER_ID = re.compile(r"\b(1\d{4})\b")
 
-STOPWORDS = set("""a o as os de da do das dos e é em um uma para por com no na nos nas que qual quais
-meu minha meus minhas se eu voce vocês voces como quando quanto quantos quantas ao à mais ou já
-ja tem ter foi ser está esta isso esse essa sobre posso pode consigo""".split())
+STOPWORDS = set(
+    [
+        "a",
+        "o",
+        "as",
+        "os",
+        "de",
+        "da",
+        "do",
+        "das",
+        "dos",
+        "e",
+        "é",
+        "em",
+        "um",
+        "uma",
+        "para",
+        "por",
+        "com",
+        "no",
+        "na",
+        "nos",
+        "nas",
+        "que",
+        "qual",
+        "quais",
+        "meu",
+        "minha",
+        "meus",
+        "minhas",
+        "se",
+        "eu",
+        "voce",
+        "vocês",
+        "voces",
+        "como",
+        "quando",
+        "quanto",
+        "quantos",
+        "quantas",
+        "ao",
+        "à",
+        "mais",
+        "ou",
+        "já",
+        "ja",
+        "tem",
+        "ter",
+        "foi",
+        "ser",
+        "está",
+        "esta",
+        "isso",
+        "esse",
+        "essa",
+        "sobre",
+        "posso",
+        "pode",
+        "consigo",
+    ]
+)
 
 # Offline intent → named analytics query (used when no LLM is configured for text-to-SQL).
 ANALYTICS_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
@@ -31,7 +89,10 @@ ANALYTICS_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
     (("transportadora", "atraso", "atrasos", "entrega"), "carrier_delay_ranking"),
     (("mes", "mensal", "evolucao", "crescimento", "tendencia"), "monthly_volume"),
     (("csat", "satisfacao", "canal", "canais"), "csat_by_channel"),
-    (("recorrente", "reincidente", "mais chamados", "clientes que mais"), "top_contacting_customers"),
+    (
+        ("recorrente", "reincidente", "mais chamados", "clientes que mais"),
+        "top_contacting_customers",
+    ),
     (("categoria", "categorias", "volume", "tickets", "chamados"), "tickets_by_category"),
 ]
 
@@ -61,8 +122,10 @@ def lookup_order(order_id: int, customer_id: int | None = None) -> dict | None:
     row = df.iloc[0].to_dict()
     eta, delivered = pd.to_datetime(row["estimated_delivery"]), row["delivered_at"]
     row["days_late"] = (pd.to_datetime(delivered) - eta).days if pd.notna(delivered) else None
-    return {k: (None if pd.isna(v) else (str(v) if not isinstance(v, int | float) else v))
-            for k, v in row.items()}
+    return {
+        k: (None if pd.isna(v) else (str(v) if not isinstance(v, int | float) else v))
+        for k, v in row.items()
+    }
 
 
 def analytics_query_for(question: str) -> str | None:

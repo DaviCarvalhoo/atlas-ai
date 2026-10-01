@@ -36,12 +36,14 @@ class LSAEmbedder:
         self.pipeline = None
 
     def fit(self, corpus: list[str]) -> LSAEmbedder:
-        tfidf = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True, strip_accents="unicode",
-                                min_df=1, lowercase=True)
+        tfidf = TfidfVectorizer(
+            ngram_range=(1, 2), sublinear_tf=True, strip_accents="unicode", min_df=1, lowercase=True
+        )
         n_features = tfidf.fit(corpus).transform(corpus).shape[1]
         dims = max(2, min(self.dims, len(corpus) - 1, n_features - 1))
-        self.pipeline = make_pipeline(tfidf, TruncatedSVD(dims, random_state=self.seed),
-                                      Normalizer(copy=False))
+        self.pipeline = make_pipeline(
+            tfidf, TruncatedSVD(dims, random_state=self.seed), Normalizer(copy=False)
+        )
         self.pipeline.fit(corpus)
         return self
 

@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     data_dir: Path = Field(Path("data"), alias="ATLAS_DATA_DIR")
     artifacts_dir: Path = Field(Path("artifacts"), alias="ATLAS_ARTIFACTS_DIR")
     knowledge_base_dir: Path = Field(Path("knowledge_base"), alias="ATLAS_KB_DIR")
+    sql_dir: Path = Field(Path("sql"), alias="ATLAS_SQL_DIR")
 
     # MLOps
     mlflow_tracking_uri: str = Field("sqlite:///mlflow.db", alias="MLFLOW_TRACKING_URI")

@@ -9,9 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from atlas.config import get_settings
 from atlas.db import read_only_query
-
-ANALYTICS_PATH = Path(__file__).resolve().parents[2] / "sql" / "analytics.sql"
 
 
 @dataclass(frozen=True)
@@ -22,7 +21,8 @@ class NamedQuery:
 
 
 @lru_cache
-def load_queries(path: Path = ANALYTICS_PATH) -> dict[str, NamedQuery]:
+def load_queries(path: Path | None = None) -> dict[str, NamedQuery]:
+    path = path or get_settings().sql_dir / "analytics.sql"
     queries = {}
     for block in re.split(r"^-- name:\s*", path.read_text(encoding="utf-8"), flags=re.MULTILINE)[
         1:

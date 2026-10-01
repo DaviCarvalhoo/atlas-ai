@@ -6,7 +6,7 @@
 SELECT category,
        COUNT(*)                                              AS tickets,
        ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1)    AS share_pct,
-       ROUND(AVG(resolution_hours), 1)                       AS avg_resolution_h,
+       ROUND(CAST(AVG(resolution_hours) AS NUMERIC), 1)      AS avg_resolution_h,
        ROUND(AVG(csat), 2)                                   AS avg_csat
 FROM tickets
 GROUP BY category

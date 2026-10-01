@@ -44,6 +44,6 @@ CREATE INDEX IF NOT EXISTS idx_tickets_created   ON tickets (created_at);
 CREATE INDEX IF NOT EXISTS idx_tickets_category  ON tickets (category);
 
 -- Read-only view exposed to the agent: no PII columns.
-CREATE VIEW IF NOT EXISTS v_customer_safe AS
+CREATE VIEW v_customer_safe AS
 SELECT customer_id, state, tier, signup_date
 FROM customers;

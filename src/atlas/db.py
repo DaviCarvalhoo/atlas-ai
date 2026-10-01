@@ -10,8 +10,6 @@ from sqlalchemy import Engine, create_engine, text
 
 from atlas.config import get_settings
 
-SCHEMA_PATH = Path(__file__).resolve().parents[2] / "sql" / "schema.sql"
-
 
 @lru_cache
 def get_engine(url: str | None = None) -> Engine:
@@ -31,7 +29,8 @@ def create_schema(engine: Engine) -> None:
         conn.execute(text("DROP VIEW IF EXISTS v_customer_safe"))
         for table in ("tickets", "orders", "customers"):
             conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
-        for stmt in _statements(SCHEMA_PATH.read_text(encoding="utf-8")):
+        schema = (get_settings().sql_dir / "schema.sql").read_text(encoding="utf-8")
+        for stmt in _statements(schema):
             conn.execute(text(stmt))
 
 
